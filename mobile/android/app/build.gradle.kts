@@ -18,13 +18,18 @@ plugins {
 android {
     namespace = "com.ironstronginitiative.ishi"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.0.12077973"
 
     compileSdk = 35
 
     defaultConfig {
+        applicationId = "com.example.mobile" // or your actual ID
+        minSdk = flutter.minSdkVersion
         targetSdk = 35
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
