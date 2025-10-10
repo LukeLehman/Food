@@ -1,18 +1,27 @@
+// lib/pages/camera_page.dart
 import 'dart:convert';
-import 'dart:html' as html;
 import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:intl/intl.dart';
 
-/// Optional override at run-time:
-/// flutter run -d web-server --web-hostname 0.0.0.0 --web-port 5287 \
-///   --dart-define=ISHI_API=https://<your-forwarded-8000>.github.dev
-const String _apiOverride =
-    String.fromEnvironment('ISHI_API', defaultValue: '');
+/// Read the backend base URL from a build-time define:
+/// flutter run/build ... --dart-define=API_BASE_URL=https://ishi-api.onrender.com
+const String _apiBase =
+    String.fromEnvironment('API_BASE_URL', defaultValue: '');
+
+Uri _joinPath(Uri base, String path) {
+  if (path.startsWith('/')) {
+    return base.replace(path: path, query: '');
+  }
+  final p = base.path.endsWith('/') ? '${base.path}$path' : '${base.path}/$path';
+  return base.replace(path: p, query: '');
+}
 
 class CameraPage extends StatefulWidget {
   const CameraPage({super.key});
@@ -22,80 +31,63 @@ class CameraPage extends StatefulWidget {
 }
 
 class _CameraPageState extends State<CameraPage> {
+  final _picker = ImagePicker();
+
   Uint8List? _imageBytes;
   String? _result;
   String? _detail;
   bool _loading = false;
   List<Map<String, String>> _history = [];
 
-  /// Build the correct API base (always targets `/predict`)
-  Uri _buildApiUri() {
-    if (_apiOverride.isNotEmpty) {
-      final base = Uri.parse(_apiOverride);
-      return base.replace(path: '/predict', query: '');
-    }
-    final u = Uri.base; // where the Flutter web app is hosted
-    if (u.host.endsWith('.github.dev')) {
-      // Handle both "5287-xxxxx.github.dev" and "...-5287.app.github.dev"
-      var host = u.host;
-      host = host.replaceFirst(RegExp(r'^\d+-'), '8000-');      // 5287-… → 8000-…
-      host = host.replaceFirst(RegExp(r'-\d+(?=\.)'), '-8000'); // …-5287. → …-8000.
-      return Uri(scheme: u.scheme, host: host, path: '/predict');
-    }
-    // Local dev fallback
-    return Uri(scheme: 'http', host: 'localhost', port: 8000, path: '/predict');
+  Uri? get _apiBaseUri {
+    if (_apiBase.isEmpty) return null;
+    final u = Uri.tryParse(_apiBase);
+    return (u == null || !u.hasScheme) ? null : u;
   }
 
-  Future<void> _pickImage() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
-    if (result != null && result.files.single.bytes != null) {
-      setState(() {
-        _imageBytes = result.files.single.bytes!;
-        _result = null;
-        _detail = null;
-      });
-    }
+  Uri? _predictUri() => _apiBaseUri == null ? null : _joinPath(_apiBaseUri!, '/predict');
+  Uri? _healthUri() => _apiBaseUri == null ? null : _joinPath(_apiBaseUri!, '/health');
+
+  Future<void> _pickFromGallery() async {
+    final x = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 95);
+    if (x == null) return;
+    final bytes = await x.readAsBytes();
+    setState(() {
+      _imageBytes = bytes;
+      _result = null;
+      _detail = null;
+    });
   }
 
-  Future<void> _captureFromCamera() async {
-    final uploadInput = html.FileUploadInputElement();
-    uploadInput.accept = 'image/*';
-    uploadInput.setAttribute('capture', 'environment'); // hint: rear camera
-    uploadInput.click();
-
-    await uploadInput.onChange.first;
-
-    if (uploadInput.files?.isNotEmpty == true) {
-      final file = uploadInput.files!.first;
-      final reader = html.FileReader()..readAsArrayBuffer(file);
-      await reader.onLoad.first;
-      setState(() {
-        _imageBytes = reader.result as Uint8List;
-        _result = null;
-        _detail = null;
-      });
-    }
+  Future<void> _takePhoto() async {
+    // Works on Android/iOS; on web it falls back to file input.
+    final x = await _picker.pickImage(source: ImageSource.camera, imageQuality: 95);
+    if (x == null) return;
+    final bytes = await x.readAsBytes();
+    setState(() {
+      _imageBytes = bytes;
+      _result = null;
+      _detail = null;
+    });
   }
 
   Future<void> _submitImage() async {
     if (_imageBytes == null) return;
-    setState(() => _loading = true);
-
-    if (!kIsWeb) {
+    final uri = _predictUri();
+    if (uri == null) {
       setState(() {
-        _result = 'Backend call skipped (non-web platform)';
-        _loading = false;
+        _result = 'API not configured';
+        _detail = 'Pass --dart-define=API_BASE_URL=https://your-api';
       });
       return;
     }
 
-    try {
-      final uri = _buildApiUri();
-      debugPrint('POST -> $uri'); // should end with /predict
+    setState(() => _loading = true);
 
+    try {
       final req = http.MultipartRequest('POST', uri)
         ..files.add(http.MultipartFile.fromBytes(
-          'image', // <-- MUST be "image"
+          'image', // server expects "image"
           _imageBytes!,
           filename: 'upload.jpg',
           contentType: MediaType('image', 'jpeg'),
@@ -107,36 +99,49 @@ class _CameraPageState extends State<CameraPage> {
       if (res.statusCode == 200) {
         final m = jsonDecode(body) as Map<String, dynamic>;
         final isAnemic = m['anemic'] == true;
-        final score = (m['score'] ?? 0.0) * 1.0;
-        final pct = (score is num) ? (score * 100).toStringAsFixed(1) : score.toString();
+        final score = (m['score'] is num) ? (m['score'] as num).toDouble() : 0.0;
+        final pct = (score * 100).toStringAsFixed(1);
         final cropper = (m['cropper'] ?? 'n/a').toString();
 
         final resultText = isAnemic ? 'Anemic' : 'Not Anemic';
         final detailText = 'Score: $pct% • Cropper: $cropper';
 
-        final timestamp = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
-        final entry = {'timestamp': timestamp, 'result': resultText};
+        final ts = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+        final entry = {'timestamp': ts, 'result': resultText};
 
+        // Persist history
+        final prefs = await SharedPreferences.getInstance();
         setState(() {
           _result = resultText;
           _detail = detailText;
           _history.insert(0, entry);
         });
-        html.window.localStorage['ishi_test_history'] = jsonEncode(_history);
+        await prefs.setString('ishi_test_history', jsonEncode(_history));
       } else {
-        setState(() => _result = 'Error: ${res.statusCode}\n$body');
+        setState(() {
+          _result = 'Error ${res.statusCode}';
+          _detail = body;
+        });
       }
     } catch (e) {
-      setState(() => _result = 'Network error: $e');
+      setState(() {
+        _result = 'Network error';
+        _detail = e.toString();
+      });
     } finally {
       setState(() => _loading = false);
     }
   }
 
   Future<void> _testHealth() async {
-    final base = _buildApiUri();
-    final u = base.replace(path: '/health', query: '');
-    debugPrint('GET  -> $u');
+    final u = _healthUri();
+    if (u == null) {
+      setState(() {
+        _result = 'API not configured';
+        _detail = 'Pass --dart-define=API_BASE_URL=https://your-api';
+      });
+      return;
+    }
     try {
       final r = await http.get(u);
       setState(() {
@@ -151,23 +156,33 @@ class _CameraPageState extends State<CameraPage> {
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    final saved = html.window.localStorage['ishi_test_history'];
+  Future<void> _loadHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('ishi_test_history');
     if (saved != null) {
       final decoded = jsonDecode(saved);
-      _history = List<Map<String, String>>.from(
-        (decoded as List).map((e) => Map<String, String>.from(e)),
-      );
+      final list = (decoded as List)
+          .map((e) => Map<String, String>.from(e as Map))
+          .toList();
+      setState(() {
+        _history = list;
+      });
     }
   }
 
   @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final api = _buildApiUri();
-    final apiText =
-        'API: ${api.scheme}://${api.host}${api.hasPort ? ':${api.port}' : ''}${api.path}';
+    final api = _apiBaseUri;
+    final apiText = api == null
+        ? 'API: (not set)'
+        : 'API: ${api.scheme}://${api.host}${api.hasPort ? ':${api.port}' : ''}${api.path}';
+
     return Scaffold(
       appBar: AppBar(title: const Text('Anemia Checker')),
       body: SingleChildScrollView(
@@ -182,7 +197,12 @@ class _CameraPageState extends State<CameraPage> {
                   children: [
                     OutlinedButton(onPressed: _testHealth, child: const Text('Test API')),
                     const SizedBox(width: 12),
-                    Flexible(child: SelectableText(apiText, style: const TextStyle(fontSize: 12))),
+                    Flexible(
+                      child: SelectableText(
+                        apiText,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -247,10 +267,13 @@ class _CameraPageState extends State<CameraPage> {
                   runSpacing: 10,
                   alignment: WrapAlignment.center,
                   children: [
-                    ElevatedButton(onPressed: _pickImage, child: const Text('Upload Eyelid Image')),
                     ElevatedButton(
-                      onPressed: kIsWeb ? _captureFromCamera : null,
-                      child: const Text('Capture from Webcam'),
+                      onPressed: _pickFromGallery,
+                      child: const Text('Upload Eyelid Image'),
+                    ),
+                    ElevatedButton(
+                      onPressed: _takePhoto,
+                      child: Text(kIsWeb ? 'Capture (Browser Prompt)' : 'Capture from Camera'),
                     ),
                     ElevatedButton(
                       onPressed: _imageBytes == null || _loading ? null : _submitImage,
@@ -276,7 +299,7 @@ class _CameraPageState extends State<CameraPage> {
                             subtitle: Text(entry['timestamp']!),
                           ))
                       .toList(),
-                ]
+                ],
               ],
             ),
           ),
