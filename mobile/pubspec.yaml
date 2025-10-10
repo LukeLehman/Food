@@ -9,33 +9,22 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  # Networking & parsing
   http: ^1.2.2
   http_parser: ^4.0.2
   intl: ^0.18.1
-
-  # Device & storage
   image_picker: ^1.0.7
   shared_preferences: ^2.2.2
   path_provider: ^2.1.4
   flutter_secure_storage: ^9.2.2
-
-  # Auth (keep if you use it elsewhere)
   google_sign_in: ^6.2.1
-
-  # UI & links
   cupertino_icons: ^1.0.8
   url_launcher: ^6.2.5
-
-  # Local DB (keep if used elsewhere)
-  isar: ^3.1.0+1
-  isar_flutter_libs: any
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
+
   build_runner: ^2.4.13
   isar_generator: ^3.1.0+1
 
