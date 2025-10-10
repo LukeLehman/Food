@@ -1,3 +1,5 @@
+import com.android.build.gradle.LibraryExtension
+
 allprojects {
     repositories {
         google()
@@ -20,18 +22,15 @@ tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
 
-// Fallback namespace setter for Android library subprojects missing `namespace` (AGP 8+ requirement)
+// Fallback namespace for Android library subprojects missing one (AGP 8+)
+// Configures during plugin application (no afterEvaluate).
 subprojects {
-    afterEvaluate {
-        val androidExt = extensions.findByName("android") ?: return@afterEvaluate
-        val clazz = androidExt.javaClass
-        val getNs = try { clazz.getMethod("getNamespace") } catch (_: Exception) { null }
-        val setNs = try { clazz.getMethod("setNamespace", String::class.java) } catch (_: Exception) { null }
-        val currentNs = try { getNs?.invoke(androidExt) as? String } catch (_: Exception) { null }
-        if (currentNs.isNullOrBlank() && setNs != null) {
-            // Derive a stable namespace from the project name
-            val ns = "com.ironstronginitiative.${project.name.replace("-", "_")}"
-            try { setNs.invoke(androidExt, ns) } catch (_: Exception) { /* ignore */ }
+    plugins.withId("com.android.library") {
+        extensions.configure<LibraryExtension> {
+            // If the library didn't set a namespace, derive a stable one from the project name.
+            if (namespace.isNullOrBlank()) {
+                namespace = "com.ironstronginitiative." + project.name.replace("-", "_")
+            }
         }
     }
 }
