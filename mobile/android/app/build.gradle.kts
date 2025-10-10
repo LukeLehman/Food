@@ -23,11 +23,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.ironstronginitiative.ishi" // keep yours
-        minSdk = flutter.minSdkVersion
         targetSdk = 35
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
