@@ -40,6 +40,10 @@ jobs:
       - name: Accept Android licenses
         run: yes | sdkmanager --licenses
 
+      - name: Install Android platform 35
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
       - name: Build release APK
         working-directory: mobile
         run: |
