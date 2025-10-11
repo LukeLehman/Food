@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="image_picker_cache" path="image_picker/"/>
+    <external-cache-path name="external_image_picker_cache" path="image_picker/"/>
+    <external-files-path name="external_files_path" path="Pictures"/>
+    <files-path name="files_path" path="Pictures"/>
+</paths>
