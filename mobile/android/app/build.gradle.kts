@@ -1,3 +1,4 @@
+// android/app/build.gradle.kts
 import java.util.Properties
 import java.io.FileInputStream
 
@@ -17,37 +18,42 @@ plugins {
 
 android {
     namespace = "com.ironstronginitiative.ishi"
-    compileSdk = flutter.compileSdkVersion
+
+    // Use a single, explicit value.
+    compileSdk = 35
     ndkVersion = "27.0.12077973"
 
-    compileSdk = 35
-
     defaultConfig {
-        applicationId = "com.example.mobile" // or your actual ID
+        applicationId = "com.ironstronginitiative.ishi"
+        // If you prefer Flutter’s values, keep these; they map to 21 / 35 by default.
         minSdk = flutter.minSdkVersion
         targetSdk = 35
+
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Package the three most relevant ABIs (arm64 emulator on Apple Silicon needs arm64-v8a)
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
-    defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.ironstronginitiative.ishi"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+    packaging {
+        // Make sure native libs (like libisar.so) are kept as unpacked .so files
+        jniLibs {
+            useLegacyPackaging = true
+        }
+        // (Optional) keep debug symbols for troubleshooting native libs
+        // jniLibs.keepDebugSymbols += setOf("**/*.so")
     }
 
     signingConfigs {
@@ -61,7 +67,6 @@ android {
         }
     }
 
-    // ⬇️ Then reference it in buildTypes
     buildTypes {
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")

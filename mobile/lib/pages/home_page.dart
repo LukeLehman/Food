@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+
 import '../services/news_api.dart';
 import '../config/api.dart';
 
@@ -14,18 +16,81 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   List<NewsItem>? _news;
   String? _newsError;
-  bool _loading = false;
+  bool _loadingNews = false;
+  bool _checkedVersion = false;
 
-  Future<void> _openExternal(String url) async {
-    final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      await launchUrl(uri, mode: LaunchMode.platformDefault);
+  @override
+  void initState() {
+    super.initState();
+    _checkVersion();   // 1) version gate
+    _loadNews();       // 2) initial news
+  }
+
+  // Semantic version compare: returns -1 if a<b, 0 if equal, 1 if a>b
+  int _cmpVersion(String a, String b) {
+    List<int> parse(String v) => v
+        .split('.')
+        .map((e) => int.tryParse(e.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0)
+        .toList();
+
+    final pa = parse(a);
+    final pb = parse(b);
+    final len = (pa.length > pb.length) ? pa.length : pb.length;
+    for (int i = 0; i < len; i++) {
+      final ai = (i < pa.length) ? pa[i] : 0;
+      final bi = (i < pb.length) ? pb[i] : 0;
+      if (ai < bi) return -1;
+      if (ai > bi) return 1;
+    }
+    return 0;
+  }
+
+  Future<void> _checkVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final current = info.version;
+      final required = ApiConfig.minAppVersion;
+      if (_cmpVersion(current, required) < 0) {
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Update required'),
+            content: Text(
+              'A newer version of ISHI is available.\n\n'
+              'Installed: $current\n'
+              'Required:  $required\n\n'
+              'Please update to continue.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  final uri = Uri.parse(ApiConfig.storeUrl);
+                  // Use in-app browser view so user has a close/back
+                  await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+                },
+                child: const Text('Update'),
+              ),
+              // Optional: allow continue anyway
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Later'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (_) {
+      // If package info fails, don’t block the user.
+    } finally {
+      if (mounted) setState(() => _checkedVersion = true);
     }
   }
 
   Future<void> _loadNews() async {
     setState(() {
-      _loading = true;
+      _loadingNews = true;
       _newsError = null;
     });
     try {
@@ -37,30 +102,45 @@ class _HomePageState extends State<HomePage> {
       debugPrint('NEWS ERROR => $e');
       setState(() => _newsError = e.toString());
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _loadingNews = false);
+    }
+  }
+
+  Future<void> _openNews(String url) async {
+    final uri = Uri.parse(url);
+    // Use in-app browser view so there’s a visible close/back control
+    // (Chrome Custom Tabs / SFSafariViewController).
+    if (!await launchUrl(uri, mode: LaunchMode.inAppBrowserView)) {
+      // Fallback
+      await launchUrl(uri, mode: LaunchMode.platformDefault);
     }
   }
 
   @override
-  void initState() {
-    super.initState();
-    _loadNews();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final links = [
-      ('About ISHI', 'https://ironstronginitiative.com'),
-      ('Privacy Policy', 'https://ironstronginitiative.com/privacy'),
-    ];
+    // App bar with logo + full title
+    final titleRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Make sure assets/logo.png exists and is declared in pubspec.yaml
+        Image.asset('assets/logo.png', height: 24),
+        const SizedBox(width: 8),
+        const Flexible(
+          child: Text(
+            'Iron Strong Health Initiative',
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ISHI'),
+        title: titleRow,
         actions: [
           IconButton(
             tooltip: 'Refresh news',
-            onPressed: _loading ? null : _loadNews,
+            onPressed: _loadingNews ? null : _loadNews,
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -70,37 +150,14 @@ class _HomePageState extends State<HomePage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Links section
-            const Text(
-              'Links',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            const SizedBox(height: 8),
-            ...links.map((entry) {
-              final (label, url) = entry;
-              return Column(
-                children: [
-                  ListTile(
-                    title: Text(label),
-                    subtitle: Text(url, style: const TextStyle(fontSize: 12)),
-                    trailing: const Icon(Icons.open_in_new),
-                    onTap: () => _openExternal(url),
-                  ),
-                  const Divider(height: 1),
-                ],
-              );
-            }),
-
-            const SizedBox(height: 16),
-
-            // News section header
+            // Health News header
             Row(
               children: [
                 const Text(
                   'Health News',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
-                if (_loading) ...[
+                if (_loadingNews) ...[
                   const SizedBox(width: 8),
                   const SizedBox(
                     height: 16,
@@ -141,10 +198,20 @@ class _HomePageState extends State<HomePage> {
                     title: Text(n.title),
                     subtitle: Text(n.source),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _openExternal(n.url),
+                    onTap: () => _openNews(n.url),
                   ),
                 );
               }),
+            const SizedBox(height: 24),
+
+            // Optional: show a subtle note if version check hasn’t run yet
+            if (!_checkedVersion && kDebugMode)
+              const Center(
+                child: Text(
+                  'Checking app version…',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
           ],
         ),
       ),
