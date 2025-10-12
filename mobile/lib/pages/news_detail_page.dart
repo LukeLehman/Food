@@ -1,23 +1,14 @@
-import 'dart:io';
+// lib/pages/news_detail_page.dart
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import '../widgets/floating_nav.dart';
+
 import 'app_title_bar.dart';
 
 class NewsDetailPage extends StatefulWidget {
-  final String url;
   final String title;
-
-  /// Optional: if you want tab switching from this screen, pass a callback
-  /// that sets the main tab index. Otherwise we just `pop()` on nav taps.
-  final ValueChanged<int>? onNavTap;
-
-  const NewsDetailPage({
-    super.key,
-    required this.url,
-    required this.title,
-    this.onNavTap,
-  });
+  final String url;
+  const NewsDetailPage({super.key, required this.title, required this.url});
 
   @override
   State<NewsDetailPage> createState() => _NewsDetailPageState();
@@ -25,96 +16,114 @@ class NewsDetailPage extends StatefulWidget {
 
 class _NewsDetailPageState extends State<NewsDetailPage> {
   late final WebViewController _controller;
-  int _progress = 0;
-  bool _hasError = false;
+  double _progress = 0;
 
   @override
   void initState() {
     super.initState();
 
-    // Recommended perf toggle for Android hardware-accelerated webview
-    if (Platform.isAndroid) WebView.platform = AndroidWebView();
-
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.transparent)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onProgress: (p) => setState(() => _progress = p),
-          onPageStarted: (_) => setState(() {
-            _hasError = false;
-            _progress = 0;
-          }),
-          onPageFinished: (_) => setState(() => _progress = 100),
-          onWebResourceError: (e) => setState(() => _hasError = true),
+          onPageStarted: (_) => setState(() => _progress = 0),
+          onProgress: (p) => setState(() => _progress = p / 100.0),
+          onPageFinished: (_) => setState(() => _progress = 1),
         ),
       )
       ..loadRequest(Uri.parse(widget.url));
-  }
 
-  void _handleNavTap(int i) {
-    // Keep the floating bar visible; delegate to host if provided,
-    // otherwise just go back to the previous screen.
-    if (widget.onNavTap != null) {
-      widget.onNavTap!(i);
-    } else {
-      Navigator.of(context).pop();
-    }
+    // If you have any http (non-https) links and need cleartext on Android,
+    // remember to set android:usesCleartextTraffic="true" in AndroidManifest.
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final titleBar = AppTitleBar(logoSize: 28, title: widget.title);
 
     return Scaffold(
       appBar: AppBar(
-        title: const AppTitleBar(logoSize: 24),
-        actions: [
-          if (_progress > 0 && _progress < 100)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: SizedBox(
-                  height: 16, width: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: cs.primary,
-                  ),
-                ),
-              ),
+        title: titleBar,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(2),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            height: _progress < 1 && _progress > 0 ? 2 : 0,
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: _progress.clamp(0, 1),
+              child: Container(color: Theme.of(context).colorScheme.primary),
             ),
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: () => _controller.reload(),
-            icon: const Icon(Icons.refresh),
           ),
-        ],
+        ),
       ),
-      body: _hasError
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.wifi_off, size: 40),
-                    const SizedBox(height: 12),
-                    const Text('Failed to load article.'),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: () => _controller.loadRequest(Uri.parse(widget.url)),
-                      child: const Text('Try again'),
-                    )
-                  ],
-                ),
-              ),
-            )
-          : WebViewWidget(controller: _controller),
+      body: SafeArea(
+        child: WebViewWidget(controller: _controller),
+      ),
+      // Your floating bar (keep it consistent with Home)
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: _ChromeBar(
+            onBack: () async {
+              if (await _controller.canGoBack()) {
+                _controller.goBack();
+              } else {
+                if (context.mounted) Navigator.pop(context);
+              }
+            },
+            onForward: () async {
+              if (await _controller.canGoForward()) {
+                _controller.goForward();
+              }
+            },
+            onReload: () => _controller.reload(),
+            openInBrowser: () {
+              // you can wire url_launcher here if you want an external open
+              _controller.loadRequest(Uri.parse(widget.url));
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-      // Show the same floating bar here
-      bottomNavigationBar: FloatingNavBar(
-        currentIndex: 0,            // Home tab highlighted
-        onTap: _handleNavTap,
+/// A small in-page “floating” chrome bar for back/forward/reload.
+/// If you already have a global FloatingNavBar, you can remove this and
+/// reuse that widget here instead.
+class _ChromeBar extends StatelessWidget {
+  final VoidCallback onBack;
+  final VoidCallback onForward;
+  final VoidCallback onReload;
+  final VoidCallback openInBrowser;
+
+  const _ChromeBar({
+    required this.onBack,
+    required this.onForward,
+    required this.onReload,
+    required this.openInBrowser,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return PhysicalModel(
+      color: cs.surface,
+      elevation: 10,
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(24)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            IconButton(tooltip: 'Back', onPressed: onBack, icon: const Icon(Icons.arrow_back_rounded)),
+            IconButton(tooltip: 'Forward', onPressed: onForward, icon: const Icon(Icons.arrow_forward_rounded)),
+            IconButton(tooltip: 'Reload', onPressed: onReload, icon: const Icon(Icons.refresh_rounded)),
+            IconButton(tooltip: 'Open', onPressed: openInBrowser, icon: const Icon(Icons.open_in_new_rounded)),
+          ],
+        ),
       ),
     );
   }
