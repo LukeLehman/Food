@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../widgets/floating_nav.dart';
-import '../app_title_bar.dart';
+import 'app_title_bar.dart';
 
 class NewsDetailPage extends StatefulWidget {
   final String url;
