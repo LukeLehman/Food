@@ -44,7 +44,13 @@ jobs:
       - name: Flutter clean
         working-directory: mobile
         run: flutter clean      
-            
+
+      - name: Upgrade Isar libs
+        working-directory: mobile
+        run: |
+          flutter pub upgrade isar_flutter_libs
+          flutter pub upgrade isar isar_generator
+        
       - name: Get packages
         working-directory: mobile
         run: flutter pub get
