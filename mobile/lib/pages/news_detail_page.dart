@@ -39,7 +39,8 @@ class _NewsDetailPageState extends State<NewsDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final titleBar = AppTitleBar(logoSize: 28, title: widget.title);
+    // final titleBar = AppTitleBar(logoSize: 28, title: widget.title);
+    final titleBar = const AppTitleBar(logoSize: 28);
 
     return Scaffold(
       appBar: AppBar(
