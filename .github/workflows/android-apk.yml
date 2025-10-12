@@ -24,6 +24,7 @@ jobs:
         with:
           flutter-version: "3.24.0"
 
+      # Optional caches (you can comment these out if you want a fully "clean" run)
       - name: Cache Gradle
         uses: actions/cache@v4
         with:
@@ -44,45 +45,38 @@ jobs:
         working-directory: mobile
         run: flutter clean
 
-      # Make sure gradle.properties has the Flutter overrides
-      - name: Enforce compileSdk for all plugins
+      # Force compile/target/min for all subprojects via local.properties (AGP 8 uses this in Flutter plugin)
+      - name: Set SDK levels in local.properties
         working-directory: mobile/android
         run: |
-          {
-            echo "android.useAndroidX=true"
-            echo "android.enableJetifier=true"
-            echo "flutter.compileSdkVersion=35"
-            echo "flutter.minSdkVersion=21"
-            echo "flutter.targetSdkVersion=35"
-            echo "flutter.ndkVersion=27.0.12077973"
-          } >> gradle.properties
-          echo "=== gradle.properties ==="
-          cat gradle.properties
+          sed -i '/^flutter.compileSdkVersion/d' local.properties || true
+          sed -i '/^flutter.targetSdkVersion/d'  local.properties || true
+          sed -i '/^flutter.minSdkVersion/d'     local.properties || true
+          echo "flutter.compileSdkVersion=35" >> local.properties
+          echo "flutter.targetSdkVersion=35"  >> local.properties
+          echo "flutter.minSdkVersion=21"     >> local.properties
+          echo "local.properties ----"
+          cat local.properties
 
-      - name: Get packages (no upgrades)
+      - name: Get packages
         working-directory: mobile
         run: flutter pub get
 
-      # Patch isar_flutter_libs 3.1.0+1 manifest for AGP 8
-      - name: Patch isar_flutter_libs manifest
+      # Keep isar packages current (harmless if already up to date)
+      - name: Upgrade Isar libs
+        working-directory: mobile
         run: |
-          MF="$HOME/.pub-cache/hosted/pub.dev/isar_flutter_libs-3.1.0+1/android/src/main/AndroidManifest.xml"
-          if [ -f "$MF" ]; then
-            sed -i 's/package="dev.isar.isar_flutter_libs"//g' "$MF"
-            echo "Patched: $MF"
-          else
-            echo "Manifest not found at $MF"
-          fi
+          flutter pub add isar_flutter_libs@^4.0.0
+          flutter pub add isar@^4.0.0 isar_generator@^4.0.0 build_runner
 
-      - name: Accept Android licenses
-        run: yes | sdkmanager --licenses
-
-      - name: Install Android platforms & build tools
-        run: |
-          sdkmanager "platforms;android-31" "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Install Android NDK 27
-        run: sdkmanager "ndk;27.0.12077973"
+      # If you must stay on 3.x, uncomment this patch block instead of the upgrade above.
+      # - name: Patch isar_flutter_libs manifest (AGP 8 fix)
+      #   run: |
+      #     MF="$HOME/.pub-cache/hosted/pub.dev/isar_flutter_libs-3.1.0+1/android/src/main/AndroidManifest.xml"
+      #     if [ -f "$MF" ]; then
+      #       sed -i 's/package="dev.isar.isar_flutter_libs"//g' "$MF"
+      #       echo "Patched $MF (removed package attr)"
+      #     fi
 
       - name: Run Isar codegen
         working-directory: mobile
@@ -98,6 +92,17 @@ jobs:
           keyPassword=${{ secrets.KEY_PASSWORD }}
           EOF
 
+      - name: Accept Android licenses
+        run: yes | sdkmanager --licenses
+
+      # Install platforms: 35 (your compileSdk) AND 31 (covers libs that reference lStar)
+      - name: Install Android platforms & build tools
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platforms;android-31"
+
+      - name: Install Android NDK 27
+        run: sdkmanager "ndk;27.0.12077973"
+
       - name: Build release APK
         working-directory: mobile
         run: |
@@ -106,13 +111,15 @@ jobs:
             --dart-define=MIN_APP_VERSION=1.0.0 \
             --dart-define=APP_STORE_URL=https://ironstronginitiative.com/app
 
-      - name: Upload APK artifact
+      - name: Upload APK artifact (overwrite)
         uses: actions/upload-artifact@v4
         with:
-          name: app-release.apk
+          name: app-release           # same name each run
           path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          overwrite: true             # <---- overwrite instead of piling up
+          retention-days: 14          # optional: keep for 14 days
 
-      - name: Verify native libs are present
+      - name: Verify libisar.so packaged
         run: |
           unzip -l mobile/build/app/outputs/flutter-apk/app-release.apk | grep -E "lib/(arm64-v8a|armeabi-v7a|x86_64)/libisar\.so" || true
           echo "If nothing printed above, libisar.so is missing!"
