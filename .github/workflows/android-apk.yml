@@ -40,31 +40,49 @@ jobs:
           key: ${{ runner.os }}-pub-${{ hashFiles('mobile/pubspec.lock') }}
           restore-keys: ${{ runner.os }}-pub-
 
-      - name: Install Android platforms & build-tools (API 31+)
-        run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
-          # also ensure 31 is available to satisfy lStar refs in transitive libs
-          sdkmanager "platforms;android-31"
-            
       - name: Flutter clean
         working-directory: mobile
         run: flutter clean
 
-      - name: Get packages
+      # Make sure gradle.properties has the Flutter overrides
+      - name: Enforce compileSdk for all plugins
+        working-directory: mobile/android
+        run: |
+          {
+            echo "android.useAndroidX=true"
+            echo "android.enableJetifier=true"
+            echo "flutter.compileSdkVersion=35"
+            echo "flutter.minSdkVersion=21"
+            echo "flutter.targetSdkVersion=35"
+            echo "flutter.ndkVersion=27.0.12077973"
+          } >> gradle.properties
+          echo "=== gradle.properties ==="
+          cat gradle.properties
+
+      - name: Get packages (no upgrades)
         working-directory: mobile
         run: flutter pub get
 
-      # Patch isar_flutter_libs manifest for AGP 8
-      - name: Patch isar_flutter_libs manifest (AGP 8 fix)
+      # Patch isar_flutter_libs 3.1.0+1 manifest for AGP 8
+      - name: Patch isar_flutter_libs manifest
         run: |
           MF="$HOME/.pub-cache/hosted/pub.dev/isar_flutter_libs-3.1.0+1/android/src/main/AndroidManifest.xml"
           if [ -f "$MF" ]; then
             sed -i 's/package="dev.isar.isar_flutter_libs"//g' "$MF"
             echo "Patched: $MF"
-            head -n 5 "$MF"
           else
-            echo "Manifest not found at $MF"; exit 1
+            echo "Manifest not found at $MF"
           fi
+
+      - name: Accept Android licenses
+        run: yes | sdkmanager --licenses
+
+      - name: Install Android platforms & build tools
+        run: |
+          sdkmanager "platforms;android-31" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install Android NDK 27
+        run: sdkmanager "ndk;27.0.12077973"
 
       - name: Run Isar codegen
         working-directory: mobile
@@ -79,16 +97,6 @@ jobs:
           keyAlias=${{ secrets.KEY_ALIAS }}
           keyPassword=${{ secrets.KEY_PASSWORD }}
           EOF
-
-      - name: Accept Android licenses
-        run: yes | sdkmanager --licenses
-
-      - name: Install Android platform 35 + Build tools
-        run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Install Android NDK 27
-        run: sdkmanager "ndk;27.0.12077973"
 
       - name: Build release APK
         working-directory: mobile
