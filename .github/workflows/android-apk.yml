@@ -92,6 +92,14 @@ jobs:
       - name: Install Android NDK 27
         run: sdkmanager "ndk;27.0.12077973"
 
+      - name: Generate launcher icons
+        working-directory: mobile
+        run: flutter pub run flutter_launcher_icons
+
+      - name: Generate native splash
+        working-directory: mobile
+        run: flutter pub run flutter_native_splash:create
+
       - name: Build release APK
         working-directory: mobile
         run: |

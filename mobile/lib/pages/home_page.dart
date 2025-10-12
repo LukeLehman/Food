@@ -1,11 +1,11 @@
 // lib/pages/home_page.dart
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../services/news_api.dart';
 import '../config/api.dart';
+import 'news_detail_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -22,25 +22,22 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _checkVersion();   // 1) version gate
-    _loadNews();       // 2) initial news
+    _checkVersion();
+    _loadNews();
   }
 
-  // Semantic version compare: returns -1 if a<b, 0 if equal, 1 if a>b
+  // Compare semantic versions: -1 if a<b, 0 if equal, 1 if a>b
   int _cmpVersion(String a, String b) {
-    List<int> parse(String v) => v
+    List<int> p(String v) => v
         .split('.')
         .map((e) => int.tryParse(e.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0)
         .toList();
-
-    final pa = parse(a);
-    final pb = parse(b);
+    final pa = p(a), pb = p(b);
     final len = (pa.length > pb.length) ? pa.length : pb.length;
-    for (int i = 0; i < len; i++) {
-      final ai = (i < pa.length) ? pa[i] : 0;
-      final bi = (i < pb.length) ? pb[i] : 0;
-      if (ai < bi) return -1;
-      if (ai > bi) return 1;
+    for (var i = 0; i < len; i++) {
+      final ai = i < pa.length ? pa[i] : 0;
+      final bi = i < pb.length ? pb[i] : 0;
+      if (ai != bi) return ai.compareTo(bi);
     }
     return 0;
   }
@@ -50,8 +47,7 @@ class _HomePageState extends State<HomePage> {
       final info = await PackageInfo.fromPlatform();
       final current = info.version;
       final required = ApiConfig.minAppVersion;
-      if (_cmpVersion(current, required) < 0) {
-        if (!mounted) return;
+      if (_cmpVersion(current, required) < 0 && mounted) {
         await showDialog<void>(
           context: context,
           barrierDismissible: false,
@@ -65,24 +61,17 @@ class _HomePageState extends State<HomePage> {
             ),
             actions: [
               TextButton(
-                onPressed: () async {
-                  final uri = Uri.parse(ApiConfig.storeUrl);
-                  // Use in-app browser view so user has a close/back
-                  await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+                onPressed: () {
+                  Navigator.of(ctx).pop(); // leave upgrade path to store links in About/Profile
                 },
-                child: const Text('Update'),
-              ),
-              // Optional: allow continue anyway
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Later'),
+                child: const Text('OK'),
               ),
             ],
           ),
         );
       }
     } catch (_) {
-      // If package info fails, don’t block the user.
+      // Don’t block if PackageInfo fails.
     } finally {
       if (mounted) setState(() => _checkedVersion = true);
     }
@@ -96,34 +85,25 @@ class _HomePageState extends State<HomePage> {
     try {
       final url = ApiConfig.newsUrl();
       debugPrint('NEWS URL => $url');
-      final items = await NewsApi.fetch(); // uses ApiConfig.newsUrl()
+      final items = await NewsApi.fetch();
+      if (!mounted) return;
       setState(() => _news = items);
     } catch (e) {
       debugPrint('NEWS ERROR => $e');
+      if (!mounted) return;
       setState(() => _newsError = e.toString());
     } finally {
       if (mounted) setState(() => _loadingNews = false);
     }
   }
 
-  Future<void> _openNews(String url) async {
-    final uri = Uri.parse(url);
-    // Use in-app browser view so there’s a visible close/back control
-    // (Chrome Custom Tabs / SFSafariViewController).
-    if (!await launchUrl(uri, mode: LaunchMode.inAppBrowserView)) {
-      // Fallback
-      await launchUrl(uri, mode: LaunchMode.platformDefault);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    // App bar with logo + full title
     final titleRow = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Make sure assets/logo.png exists and is declared in pubspec.yaml
-        Image.asset('assets/logo.png', height: 24),
+        // Ensure this exists and is listed in pubspec.yaml
+        Image.asset('assets/logo.png', height: 32),
         const SizedBox(width: 8),
         const Flexible(
           child: Text(
@@ -150,7 +130,6 @@ class _HomePageState extends State<HomePage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Health News header
             Row(
               children: [
                 const Text(
@@ -160,8 +139,8 @@ class _HomePageState extends State<HomePage> {
                 if (_loadingNews) ...[
                   const SizedBox(width: 8),
                   const SizedBox(
-                    height: 16,
                     width: 16,
+                    height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ],
@@ -198,13 +177,21 @@ class _HomePageState extends State<HomePage> {
                     title: Text(n.title),
                     subtitle: Text(n.source),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _openNews(n.url),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => NewsDetailPage(
+                            title: n.title,
+                            url: n.url,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 );
               }),
-            const SizedBox(height: 24),
 
-            // Optional: show a subtle note if version check hasn’t run yet
+            const SizedBox(height: 24),
             if (!_checkedVersion && kDebugMode)
               const Center(
                 child: Text(
