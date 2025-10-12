@@ -5,7 +5,7 @@ import 'pages/profile_page.dart';
 import 'widgets/floating_nav.dart';
 import 'pages/about_page.dart';
 // Ensures Isar native libraries are bundled in release builds.
-import 'package:isar_flutter_libs/isar_flutter_libs.dart' as _;
+// import 'package:isar_flutter_libs/isar_flutter_libs.dart' as _;
 
 void main() => runApp(const ISHIApp());
 
