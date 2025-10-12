@@ -63,11 +63,11 @@ jobs:
         run: flutter pub get
 
       # Keep isar packages current (harmless if already up to date)
-      - name: Upgrade Isar libs
+      - name: Upgrade Isar libs (pin to 4.x)
         working-directory: mobile
         run: |
-          flutter pub add isar_flutter_libs@^4.0.0
-          flutter pub add isar@^4.0.0 isar_generator@^4.0.0 build_runner
+          flutter pub add isar_flutter_libs:^4.0.0
+          flutter pub add isar:^4.0.0 isar_generator:^4.0.0 build_runner
 
       # If you must stay on 3.x, uncomment this patch block instead of the upgrade above.
       # - name: Patch isar_flutter_libs manifest (AGP 8 fix)
