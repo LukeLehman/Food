@@ -1,8 +1,11 @@
 // lib/config/api.dart
 // lib/config/api.dart
 class ApiConfig {
-  // TEMP: hardcode to prod to force-correct APK
-  static const String base = 'https://ishi-api.onrender.com';
+  static const String base = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'https://ishi-api.onrender.com',
+);
+
 
   static String healthzUrl() =>
       Uri.parse(base).replace(path: '/healthz').toString();
