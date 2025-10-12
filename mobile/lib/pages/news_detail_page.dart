@@ -1,13 +1,23 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import '../ui/app_title_bar.dart';
-import '../widgets/floating_nav.dart'; // your existing FloatingNavBar
+import '../widgets/floating_nav.dart';
+import '../app_title_bar.dart';
 
 class NewsDetailPage extends StatefulWidget {
-  final String title;
   final String url;
-  const NewsDetailPage({super.key, required this.title, required this.url});
+  final String title;
+
+  /// Optional: if you want tab switching from this screen, pass a callback
+  /// that sets the main tab index. Otherwise we just `pop()` on nav taps.
+  final ValueChanged<int>? onNavTap;
+
+  const NewsDetailPage({
+    super.key,
+    required this.url,
+    required this.title,
+    this.onNavTap,
+  });
 
   @override
   State<NewsDetailPage> createState() => _NewsDetailPageState();
@@ -15,83 +25,96 @@ class NewsDetailPage extends StatefulWidget {
 
 class _NewsDetailPageState extends State<NewsDetailPage> {
   late final WebViewController _controller;
-  bool _canGoBack = false;
-  bool _loading = true;
+  int _progress = 0;
+  bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
+
+    // Recommended perf toggle for Android hardware-accelerated webview
     if (Platform.isAndroid) WebView.platform = AndroidWebView();
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.transparent)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (_) => setState(() => _loading = true),
-          onPageFinished: (_) async {
-            final can = await _controller.canGoBack();
-            setState(() {
-              _canGoBack = can;
-              _loading = false;
-            });
-          },
+          onProgress: (p) => setState(() => _progress = p),
+          onPageStarted: (_) => setState(() {
+            _hasError = false;
+            _progress = 0;
+          }),
+          onPageFinished: (_) => setState(() => _progress = 100),
+          onWebResourceError: (e) => setState(() => _hasError = true),
         ),
       )
       ..loadRequest(Uri.parse(widget.url));
   }
 
-  Future<void> _back() async {
-    if (await _controller.canGoBack()) {
-      await _controller.goBack();
-      setState(() {});
+  void _handleNavTap(int i) {
+    // Keep the floating bar visible; delegate to host if provided,
+    // otherwise just go back to the previous screen.
+    if (widget.onNavTap != null) {
+      widget.onNavTap!(i);
     } else {
-      if (mounted) Navigator.of(context).maybePop();
-    }
-  }
-
-  void _onBottomTap(int index) {
-    switch (index) {
-      case 0: // Home
-        Navigator.of(context).popUntil((r) => r.isFirst);
-        break;
-      case 1: // ISHI-AI Check
-        Navigator.of(context).popUntil((r) => r.isFirst);
-        // push your AI page route here if needed
-        break;
-      case 2: // Events
-      case 3: // Profile
-      case 4: // About
-        Navigator.of(context).popUntil((r) => r.isFirst);
-        // then push the corresponding tab/page if you have routes
-        break;
-      case 5: // Donate
-        // If you have a donate route or external link, open it:
-        // launchUrl(Uri.parse('https://...'));
-        break;
+      Navigator.of(context).pop();
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          tooltip: _canGoBack ? 'Back in page' : 'Back',
-          icon: const Icon(Icons.arrow_back),
-          onPressed: _back,
-        ),
-        title: const AppTitleBar(logoSize: 28),
-      ),
-      body: Stack(
-        children: [
-          WebViewWidget(controller: _controller),
-          if (_loading) const LinearProgressIndicator(minHeight: 2),
+        title: const AppTitleBar(logoSize: 24),
+        actions: [
+          if (_progress > 0 && _progress < 100)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: SizedBox(
+                  height: 16, width: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: cs.primary,
+                  ),
+                ),
+              ),
+            ),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: () => _controller.reload(),
+            icon: const Icon(Icons.refresh),
+          ),
         ],
       ),
-      // Show your existing floating nav on the article screen too:
+      body: _hasError
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.wifi_off, size: 40),
+                    const SizedBox(height: 12),
+                    const Text('Failed to load article.'),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () => _controller.loadRequest(Uri.parse(widget.url)),
+                      child: const Text('Try again'),
+                    )
+                  ],
+                ),
+              ),
+            )
+          : WebViewWidget(controller: _controller),
+
+      // Show the same floating bar here
       bottomNavigationBar: FloatingNavBar(
-        currentIndex: 0,      // highlight whatever makes sense here
-        onTap: _onBottomTap,  // same handler as Home
+        currentIndex: 0,            // Home tab highlighted
+        onTap: _handleNavTap,
       ),
     );
   }
