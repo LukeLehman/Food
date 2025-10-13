@@ -1,7 +1,7 @@
 // lib/pages/news_detail_page.dart
-import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'app_title_bar.dart';
 
@@ -32,24 +32,26 @@ class _NewsDetailPageState extends State<NewsDetailPage> {
         ),
       )
       ..loadRequest(Uri.parse(widget.url));
+  }
 
-    // If you have any http (non-https) links and need cleartext on Android,
-    // remember to set android:usesCleartextTraffic="true" in AndroidManifest.
+  Future<void> _openExternally() async {
+    final uri = Uri.parse(widget.url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      await launchUrl(uri, mode: LaunchMode.platformDefault);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // final titleBar = AppTitleBar(logoSize: 28, title: widget.title);
-    final titleBar = const AppTitleBar(logoSize: 28);
-
     return Scaffold(
       appBar: AppBar(
-        title: titleBar,
+        // smaller than Home, still bigger than default
+        title: const AppTitleBar(logoSize: 36),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(2),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            height: _progress < 1 && _progress > 0 ? 2 : 0,
+            height: (_progress > 0 && _progress < 1) ? 2 : 0,
             alignment: Alignment.centerLeft,
             child: FractionallySizedBox(
               widthFactor: _progress.clamp(0, 1),
@@ -58,10 +60,7 @@ class _NewsDetailPageState extends State<NewsDetailPage> {
           ),
         ),
       ),
-      body: SafeArea(
-        child: WebViewWidget(controller: _controller),
-      ),
-      // Your floating bar (keep it consistent with Home)
+      body: SafeArea(child: WebViewWidget(controller: _controller)),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -69,8 +68,8 @@ class _NewsDetailPageState extends State<NewsDetailPage> {
             onBack: () async {
               if (await _controller.canGoBack()) {
                 _controller.goBack();
-              } else {
-                if (context.mounted) Navigator.pop(context);
+              } else if (mounted) {
+                Navigator.pop(context);
               }
             },
             onForward: () async {
@@ -79,10 +78,7 @@ class _NewsDetailPageState extends State<NewsDetailPage> {
               }
             },
             onReload: () => _controller.reload(),
-            openInBrowser: () {
-              // you can wire url_launcher here if you want an external open
-              _controller.loadRequest(Uri.parse(widget.url));
-            },
+            openInBrowser: _openExternally,
           ),
         ),
       ),
@@ -90,9 +86,7 @@ class _NewsDetailPageState extends State<NewsDetailPage> {
   }
 }
 
-/// A small in-page “floating” chrome bar for back/forward/reload.
-/// If you already have a global FloatingNavBar, you can remove this and
-/// reuse that widget here instead.
+/// Small chrome bar for back/forward/reload/open
 class _ChromeBar extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onForward;

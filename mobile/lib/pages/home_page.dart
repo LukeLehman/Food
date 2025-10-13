@@ -6,6 +6,19 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../services/news_api.dart';
 import '../config/api.dart';
 import 'news_detail_page.dart';
+import 'app_title_bar.dart';
+
+
+appBar: AppBar(
+  title: const AppTitleBar(logoSize: 44), // bigger logo on Home
+  actions: [
+    IconButton(
+      tooltip: 'Refresh news',
+      onPressed: _loadingNews ? null : _loadNews,
+      icon: const Icon(Icons.refresh),
+    ),
+  ],
+),
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});

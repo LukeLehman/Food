@@ -37,20 +37,27 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/logo.png
-  adaptive_icon_background: "#FFFFFF"     # Android 8+ background
-  adaptive_icon_foreground: assets/logo.png
+
+  # Fallback for iOS & older Android
+  image_path: assets/icon_foreground.png
+
+  # Adaptive (Android 8+)
+  adaptive_icon_background: "#FFFFFF"        # or a brand hex
+  adaptive_icon_foreground: assets/icon_foreground.png
+  adaptive_icon_monochrome: assets/icon_monochrome.png
+
   remove_alpha_ios: true
   min_sdk_android: 21
 
 # --- flutter_native_splash CONFIG (top-level) ---
 flutter_native_splash:
   color: "#FFFFFF"
-  image: assets/logo.png
+  image: assets/icon_foreground.png
   android_12:
     color: "#FFFFFF"
-    image: assets/logo.png
+    image: assets/icon_foreground.png
   web: false
+
 
 flutter:
   uses-material-design: true
