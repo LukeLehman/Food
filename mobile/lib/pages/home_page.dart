@@ -1,24 +1,13 @@
 // lib/pages/home_page.dart
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import '../services/news_api.dart';
 import '../config/api.dart';
-import 'news_detail_page.dart';
+import '../services/news_api.dart';
 import 'app_title_bar.dart';
-
-
-appBar: AppBar(
-  title: const AppTitleBar(logoSize: 44), // bigger logo on Home
-  actions: [
-    IconButton(
-      tooltip: 'Refresh news',
-      onPressed: _loadingNews ? null : _loadNews,
-      icon: const Icon(Icons.refresh),
-    ),
-  ],
-),
+import 'news_detail_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -39,18 +28,19 @@ class _HomePageState extends State<HomePage> {
     _loadNews();
   }
 
-  // Compare semantic versions: -1 if a<b, 0 if equal, 1 if a>b
+  // ---- version gating ----
   int _cmpVersion(String a, String b) {
-    List<int> p(String v) => v
+    List<int> parse(String v) => v
         .split('.')
         .map((e) => int.tryParse(e.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0)
         .toList();
-    final pa = p(a), pb = p(b);
+    final pa = parse(a), pb = parse(b);
     final len = (pa.length > pb.length) ? pa.length : pb.length;
-    for (var i = 0; i < len; i++) {
-      final ai = i < pa.length ? pa[i] : 0;
-      final bi = i < pb.length ? pb[i] : 0;
-      if (ai != bi) return ai.compareTo(bi);
+    for (int i = 0; i < len; i++) {
+      final ai = (i < pa.length) ? pa[i] : 0;
+      final bi = (i < pb.length) ? pb[i] : 0;
+      if (ai < bi) return -1;
+      if (ai > bi) return 1;
     }
     return 0;
   }
@@ -74,22 +64,28 @@ class _HomePageState extends State<HomePage> {
             ),
             actions: [
               TextButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop(); // leave upgrade path to store links in About/Profile
+                onPressed: () async {
+                  final uri = Uri.parse(ApiConfig.storeUrl);
+                  await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
                 },
-                child: const Text('OK'),
+                child: const Text('Update'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Later'),
               ),
             ],
           ),
         );
       }
     } catch (_) {
-      // Don’t block if PackageInfo fails.
+      // ignore
     } finally {
       if (mounted) setState(() => _checkedVersion = true);
     }
   }
 
+  // ---- news loading ----
   Future<void> _loadNews() async {
     setState(() {
       _loadingNews = true;
@@ -99,37 +95,32 @@ class _HomePageState extends State<HomePage> {
       final url = ApiConfig.newsUrl();
       debugPrint('NEWS URL => $url');
       final items = await NewsApi.fetch();
-      if (!mounted) return;
       setState(() => _news = items);
     } catch (e) {
       debugPrint('NEWS ERROR => $e');
-      if (!mounted) return;
       setState(() => _newsError = e.toString());
     } finally {
       if (mounted) setState(() => _loadingNews = false);
     }
   }
 
+  void _openNews(NewsItem item) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NewsDetailPage(title: item.title, url: item.url),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final titleRow = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Ensure this exists and is listed in pubspec.yaml
-        Image.asset('assets/logo.png', height: 32),
-        const SizedBox(width: 8),
-        const Flexible(
-          child: Text(
-            'Iron Strong Health Initiative',
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-
     return Scaffold(
+      // Bigger logo, smaller title inside our custom bar
       appBar: AppBar(
-        title: titleRow,
+        title: const AppTitleBar(
+          logoSize: 48,           // bigger mark
+          titleFontSize: 16,      // slightly smaller text
+        ),
         actions: [
           IconButton(
             tooltip: 'Refresh news',
@@ -152,15 +143,13 @@ class _HomePageState extends State<HomePage> {
                 if (_loadingNews) ...[
                   const SizedBox(width: 8),
                   const SizedBox(
-                    width: 16,
-                    height: 16,
+                    height: 16, width: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ],
               ],
             ),
             const SizedBox(height: 8),
-
             if (_newsError != null)
               Card(
                 color: Colors.red[50],
@@ -183,27 +172,15 @@ class _HomePageState extends State<HomePage> {
                 child: Center(child: Text('No news right now.')),
               )
             else
-              ..._news!.map((n) {
-                return Card(
-                  elevation: 0,
-                  child: ListTile(
-                    title: Text(n.title),
-                    subtitle: Text(n.source),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => NewsDetailPage(
-                            title: n.title,
-                            url: n.url,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                );
-              }),
-
+              ..._news!.map((n) => Card(
+                    elevation: 0,
+                    child: ListTile(
+                      title: Text(n.title),
+                      subtitle: Text(n.source),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _openNews(n),
+                    ),
+                  )),
             const SizedBox(height: 24),
             if (!_checkedVersion && kDebugMode)
               const Center(

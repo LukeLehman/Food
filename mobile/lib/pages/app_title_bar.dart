@@ -1,39 +1,26 @@
 // lib/pages/app_title_bar.dart
 import 'package:flutter/material.dart';
 
-import 'package:flutter/material.dart';
-
-const kOrgName = 'Iron Strong Health Initiative'; // change to add “Inc.” if you want
-
 class AppTitleBar extends StatelessWidget {
   final double logoSize;
-  const AppTitleBar({super.key, this.logoSize = 40}); // bigger by default
+  final double titleFontSize;
+  const AppTitleBar({super.key, this.logoSize = 44, this.titleFontSize = 16});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Use your mark-only asset so it reads well at small sizes
-        Image.asset(
-          'assets/icon_foreground.png', // or assets/logo.png if you prefer
-          height: logoSize,
-        ),
-        const SizedBox(width: 10),
+        Image.asset('assets/logo.png', height: logoSize),
+        const SizedBox(width: 8),
         Flexible(
           child: Text(
-            kOrgName,
+            'Iron Strong Health Initiative',
             overflow: TextOverflow.ellipsis,
-            // slightly smaller than before
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: .2,
-                ),
+            style: TextStyle(fontSize: titleFontSize),
           ),
         ),
       ],
     );
   }
 }
-
