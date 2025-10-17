@@ -30,3 +30,9 @@ runs/
 # IDE / OS junk
 .vscode/
 .DS_Store
+
+# === ISHI Android signing (do not commit) ===
+android/ishi-upload.jks
+android/key.properties
+*.keystore
+*.jks
