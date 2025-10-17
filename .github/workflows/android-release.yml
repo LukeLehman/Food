@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Restore keystore & key.properties
-        working-directory: android
+        working-directory: mobile/android
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > ishi-upload.jks
           cat > key.properties <<'EOF'
@@ -31,13 +31,15 @@ jobs:
           flutter-version: "3.x"
 
       - name: Flutter pub get
+        working-directory: mobile
         run: flutter pub get
 
       - name: Build signed app bundle
+        working-directory: mobile
         run: flutter build appbundle --release
 
       - name: Upload artifact (AAB)
         uses: actions/upload-artifact@v4
         with:
           name: ishi-aab
-          path: build/app/outputs/bundle/release/app-release.aab
+          path: mobile/build/app/outputs/bundle/release/app-release.aab
