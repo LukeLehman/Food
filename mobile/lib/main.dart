@@ -4,6 +4,7 @@ import 'pages/camera_page.dart'; // ISHI-AI Check
 import 'pages/profile_page.dart';
 import 'widgets/floating_nav.dart';
 import 'pages/about_page.dart';
+import 'pages/food_page.dart';
 // Ensures Isar native libraries are bundled in release builds.
 // import 'package:isar_flutter_libs/isar_flutter_libs.dart' as _;
 
@@ -38,6 +39,7 @@ class _ISHIAppState extends State<ISHIApp> {
               CameraPage(),          // ISHI-AI Check
               _EventsPage(),
               ProfilePage(),         // ← real Profile page (Google OAuth + local storage)
+              FoodPage(),            // ← Food tracking page
               AboutPage(),
               _DonatePage(),
             ],
