@@ -35,7 +35,7 @@ class _FoodPageState extends State<FoodPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Food Tracker'),
+        title: const Text('AI Macro Tool'),
         centerTitle: true,
       ),
       body: Center(

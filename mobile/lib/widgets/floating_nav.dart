@@ -26,7 +26,7 @@ class FloatingNavBar extends StatelessWidget {
                 _item(context, Icons.auto_awesome, 'ISHI-AI Check', 1),
                 _item(context, Icons.event, 'Events', 2),
                 _item(context, Icons.person, 'Profile', 3), 
-                _item(context, Icons.person, 'Food Tracker', 4), // Food tracking page
+                _item(context, Icons.restaurant, 'Food Tracker', 4), // Food tracking page
                 _item(context, Icons.info_outline, 'About', 5),
                 _donate(context, 6),
               ],
