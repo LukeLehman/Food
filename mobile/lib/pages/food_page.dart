@@ -1,95 +1,174 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:typed_data';
+import 'package:camera/camera.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
+import 'nutrition_results_page.dart';
 
 class FoodPage extends StatefulWidget {
-  const FoodPage({super.key});
+  final CameraDescription camera;
+
+  const FoodPage({super.key, required this.camera});
 
   @override
   State<FoodPage> createState() => _FoodPageState();
 }
 
 class _FoodPageState extends State<FoodPage> {
-  final _picker = ImagePicker();
-  Uint8List? _imageBytes;
+  late CameraController _controller;
+  late Future<void> _initializeControllerFuture;
 
-  Future<void> _takePhoto() async {
-    final x = await _picker.pickImage(source: ImageSource.camera, imageQuality: 95);
-    if (x == null) return;
-    final bytes = await x.readAsBytes();
-    setState(() {
-      _imageBytes = bytes;
-    });
+  // NEW: controller for manual food input
+  final TextEditingController _foodController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = CameraController(
+      widget.camera,
+      ResolutionPreset.medium,
+      enableAudio: false,
+    );
+    _initializeControllerFuture = _controller.initialize();
   }
 
-  Future<void> _pickFromGallery() async {
-    final x = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 95);
-    if (x == null) return;
-    final bytes = await x.readAsBytes();
-    setState(() {
-      _imageBytes = bytes;
-    });
+  @override
+  void dispose() {
+    _foodController.dispose();
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('AI Macro Tool'),
-        centerTitle: true,
+      appBar: AppBar(title: const Text('Food Tracking Camera')),
+      body: Column(
+        children: [
+          // Manual input for desktop/web
+          if (kIsWeb)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _foodController,
+                      decoration: const InputDecoration(
+                        labelText: 'Enter food name',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () async {
+                      final food = _foodController.text.trim();
+                      if (food.isEmpty) return;
+
+                      final nutrition =
+                          await FoodAnalyzer.fetchNutrition(food);
+
+                      if (!mounted || nutrition == null) return;
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => NutritionResultPage(
+                            imagePath: '', // no image
+                            foodName: food,
+                            nutrition: nutrition,
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text('Search'),
+                  ),
+                ],
+              ),
+            ),
+          // Camera preview for mobile
+          Expanded(
+            child: FutureBuilder(
+              future: _initializeControllerFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.done) {
+                  return CameraPreview(_controller);
+                } else {
+                  return const Center(child: CircularProgressIndicator());
+                }
+              },
+            ),
+          ),
+        ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_imageBytes != null) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.memory(_imageBytes!, height: 300, width: 300, fit: BoxFit.cover),
+      floatingActionButton: FloatingActionButton(
+        child: const Icon(Icons.camera_alt),
+        onPressed: () async {
+          await _initializeControllerFuture;
+          final image = await _controller.takePicture();
+
+          if (!mounted) return;
+
+          // Detect the food item
+          final food = await FoodAnalyzer.detectFood(image.path);
+          if (food == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Could not detect food item.')),
+            );
+            return;
+          }
+
+          final nutrition = await FoodAnalyzer.fetchNutrition(food);
+          if (nutrition == null) return;
+
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => NutritionResultPage(
+                imagePath: image.path,
+                foodName: food,
+                nutrition: nutrition,
               ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _imageBytes = null;
-                  });
-                },
-                icon: const Icon(Icons.close),
-                label: const Text('Clear Image'),
-              ),
-            ] else ...[
-              Icon(
-                Icons.restaurant_menu,
-                size: 64,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Food Tracker',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Upload or take a photo to track the macros!',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 32),
-              ElevatedButton.icon(
-                onPressed: _takePhoto,
-                icon: const Icon(Icons.add_a_photo),
-                label: const Text('Take Photo'),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: _pickFromGallery,
-                icon: const Icon(Icons.image),
-                label: const Text('Choose Photo'),
-              ),
-            ],
-          ],
-        ),
+            ),
+          );
+        },
       ),
     );
+  }
+}
+
+class FoodAnalyzer {
+  static final ImageLabeler _labeler =
+      ImageLabeler(options: ImageLabelerOptions());
+
+  static Future<String?> detectFood(String imagePath) async {
+    final inputImage = InputImage.fromFilePath(imagePath);
+    final labels = await _labeler.processImage(inputImage);
+
+    if (labels.isEmpty) return null;
+
+    // Best guess: highest confidence label
+    labels.sort((a, b) => b.confidence.compareTo(a.confidence));
+    return labels.first.label.toLowerCase();
+  }
+
+  static Future<Map<String, dynamic>?> fetchNutrition(String food) async {
+    const apiKey = '9KaBngBH5d2bAT8kT3X57rl4ZyhOXPDcI8d1y6ag';
+
+    final uri = Uri.parse(
+      'https://api.nal.usda.gov/fdc/v1/foods/search'
+      '?query=$food&api_key=$apiKey',
+    );
+
+    final response = await http.get(uri);
+    if (response.statusCode != 200) return null;
+
+    final data = json.decode(response.body);
+    if (data['foods'] == null || data['foods'].isEmpty) return null;
+
+    return data['foods'][0];
   }
 }

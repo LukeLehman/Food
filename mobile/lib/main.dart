@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:camera/camera.dart'; // <-- import camera
 import 'pages/home_page.dart';
 import 'pages/camera_page.dart'; // ISHI-AI Check
 import 'pages/profile_page.dart';
@@ -8,7 +9,14 @@ import 'pages/food_page.dart';
 // Ensures Isar native libraries are bundled in release builds.
 // import 'package:isar_flutter_libs/isar_flutter_libs.dart' as _;
 
-void main() => runApp(const ISHIApp());
+// Global variable to store cameras
+late List<CameraDescription> cameras;
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  cameras = await availableCameras(); // initialize cameras
+  runApp(const ISHIApp());
+}
 
 class ISHIApp extends StatefulWidget {
   const ISHIApp({super.key});
@@ -24,7 +32,10 @@ class _ISHIAppState extends State<ISHIApp> {
     return MaterialApp(
       title: 'ISHI App',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFF2B5CFF)),
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: const Color(0xFF2B5CFF),
+      ),
       darkTheme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFF2B5CFF),
@@ -34,12 +45,12 @@ class _ISHIAppState extends State<ISHIApp> {
         body: SafeArea(
           child: IndexedStack(
             index: _index,
-            children: const [
+            children: [
               HomePage(),
               CameraPage(),          // ISHI-AI Check
               _EventsPage(),
               ProfilePage(),         // ← real Profile page (Google OAuth + local storage)
-              FoodPage(),            // ← Food tracking page
+              FoodPage(camera: cameras.first), // ← macro tracking page
               AboutPage(),
               _DonatePage(),
             ],
