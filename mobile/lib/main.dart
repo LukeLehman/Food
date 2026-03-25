@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart'; // <-- import camera
+import 'package:provider/provider.dart';
 import 'pages/home_page.dart';
 import 'pages/camera_page.dart'; // ISHI-AI Check
 import 'pages/profile_page.dart';
 import 'widgets/floating_nav.dart';
 import 'pages/about_page.dart';
-import 'pages/food_page.dart';
+import 'food_tracker/food_tracker_page.dart'; // new full food tracker
+import 'food_tracker/providers/food_tracker_provider.dart';
 // Ensures Isar native libraries are bundled in release builds.
 // import 'package:isar_flutter_libs/isar_flutter_libs.dart' as _;
 
@@ -26,10 +28,19 @@ class ISHIApp extends StatefulWidget {
 
 class _ISHIAppState extends State<ISHIApp> {
   int _index = 0;
+  final _foodProvider = FoodTrackerProvider();
+
+  @override
+  void dispose() {
+    _foodProvider.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return ChangeNotifierProvider.value(
+      value: _foodProvider,
+      child: MaterialApp(
       title: 'ISHI App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -50,7 +61,7 @@ class _ISHIAppState extends State<ISHIApp> {
               CameraPage(),          // ISHI-AI Check
               _EventsPage(),
               ProfilePage(),         // ← real Profile page (Google OAuth + local storage)
-              FoodPage(camera: cameras.first), // ← macro tracking page
+              const FoodTrackerPage(), // ← full food tracker (USDA + log + charts)
               AboutPage(),
               _DonatePage(),
             ],
@@ -61,7 +72,7 @@ class _ISHIAppState extends State<ISHIApp> {
           onTap: (i) => setState(() => _index = i),
         ),
       ),
-    );
+    ));
   }
 }
 
