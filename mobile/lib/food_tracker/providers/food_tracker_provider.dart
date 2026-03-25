@@ -114,11 +114,22 @@ class FoodTrackerProvider extends ChangeNotifier {
     required double multiplier,
     required MealType mealType,
   }) async {
+    // Use the selected date so entries logged while viewing a past day are
+    // saved to that day, not today.
+    final now = DateTime.now();
+    final timestamp = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      now.hour,
+      now.minute,
+      now.second,
+    );
     final entry = MealEntry(
       id: _uuid.v4(),
       foodItem: food,
       quantityMultiplier: multiplier,
-      timestamp: DateTime.now(),
+      timestamp: timestamp,
       mealType: mealType,
     );
 
