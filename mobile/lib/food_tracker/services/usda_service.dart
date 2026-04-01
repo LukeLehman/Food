@@ -35,33 +35,28 @@ class UsdaService {
       }
     }
 
-    try {
-      final uri = Uri.parse('$_baseUrl/foods/search').replace(
-        queryParameters: {
-          'query': query,
-          'api_key': _apiKey,
-          'pageSize': pageSize.toString(),
-          'dataType': 'Foundation,SR Legacy,Branded',
-        },
-      );
+    final uri = Uri.parse('$_baseUrl/foods/search').replace(
+      queryParameters: {
+        'query': query,
+        'api_key': _apiKey,
+        'pageSize': pageSize.toString(),
+        'dataType': 'Foundation,SR Legacy,Branded',
+      },
+    );
 
-      final response = await http.get(uri).timeout(const Duration(seconds: 15));
+    final response =
+        await http.get(uri).timeout(const Duration(seconds: 20));
 
-      if (response.statusCode != 200) {
-        debugPrint('USDA search error ${response.statusCode}');
-        return [];
-      }
-
-      // Cache raw response
-      if (!kIsWeb) {
-        await MealStorage.cacheSearch(query, response.body);
-      }
-
-      return _parseFoods(response.body);
-    } catch (e) {
-      debugPrint('USDA search exception: $e');
-      return [];
+    if (response.statusCode != 200) {
+      throw Exception('USDA returned status ${response.statusCode}');
     }
+
+    // Cache raw response
+    if (!kIsWeb) {
+      await MealStorage.cacheSearch(query, response.body);
+    }
+
+    return _parseFoods(response.body);
   }
 
   /// Fetch full nutrient details for a specific fdcId.

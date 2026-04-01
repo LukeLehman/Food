@@ -102,17 +102,26 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
                 if (provider.searchError != null &&
                     provider.searchResults.isEmpty) {
                   return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.search_off, size: 48, color: Colors.grey),
-                        const SizedBox(height: 8),
-                        Text(
-                          provider.searchError!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                      ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.wifi_off, size: 48, color: Colors.grey),
+                          const SizedBox(height: 12),
+                          Text(
+                            provider.searchError!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _runSearch,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Try again'),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }

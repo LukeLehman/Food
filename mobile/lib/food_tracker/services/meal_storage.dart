@@ -78,6 +78,21 @@ class MealStorage {
     return rows.map(MealEntry.fromMap).toList();
   }
 
+  /// Returns all entries between [start] and [end] dates inclusive.
+  static Future<List<MealEntry>> entriesForDateRange(
+      DateTime start, DateTime end) async {
+    final db = await database;
+    final startStr = _dateKey(start);
+    final endStr = _dateKey(end.add(const Duration(days: 1)));
+    final rows = await db.query(
+      'meal_entries',
+      where: "timestamp >= ? AND timestamp < ?",
+      whereArgs: [startStr, endStr],
+      orderBy: 'timestamp ASC',
+    );
+    return rows.map(MealEntry.fromMap).toList();
+  }
+
   /// Returns entries for each of the last [days] days (oldest first).
   /// Returns a map keyed by date string (YYYY-MM-DD).
   static Future<Map<String, List<MealEntry>>> entriesForLastDays(

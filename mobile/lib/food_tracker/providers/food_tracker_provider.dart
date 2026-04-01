@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
@@ -216,12 +218,19 @@ class FoodTrackerProvider extends ChangeNotifier {
     _searchError = null;
     notifyListeners();
 
-    final results = await UsdaService.search(query);
-
-    _searchResults = results;
-    _isSearching = false;
-    if (results.isEmpty) {
-      _searchError = 'No results found for "$query".';
+    try {
+      final results = await UsdaService.search(query);
+      _searchResults = results;
+      _searchError = results.isEmpty ? 'No results found for "$query".' : null;
+    } on TimeoutException {
+      _searchResults = [];
+      _searchError = 'Request timed out. Check your connection and try again.';
+    } catch (e) {
+      _searchResults = [];
+      _searchError = 'Search failed. Check your connection and try again.';
+      debugPrint('USDA search exception: $e');
+    } finally {
+      _isSearching = false;
     }
     notifyListeners();
   }
